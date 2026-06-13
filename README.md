@@ -35,7 +35,7 @@
 | 🏷️ **NER Kustom** | Model IndoBERT yang di-fine-tune untuk mengenali entitas `KETERAMPILAN` dari teks bahasa Indonesia |
 | 🧬 **Semantic Similarity** | Sentence Transformer (`paraphrase-multilingual-MiniLM-L12-v2`) menghitung cosine similarity antar embedding |
 | 📊 **Skor Kecocokan** | Persentase kecocokan ditampilkan dengan gauge chart animasi |
-| 🎨 **UI/UX Premium** | Antarmuka dark-mode dengan glassmorphism, animasi gradient, dan Lottie animations |
+| 🎨 **UI/UX** | Antarmuka dark-mode dengan glassmorphism, animasi gradient, dan Lottie animations |
 | 📄 **Pipeline Visual** | Visualisasi step-by-step proses (Upload → OCR → NER → Matching → Hasil) |
 
 ---
@@ -227,5 +227,5 @@ Proyek ini dibuat untuk UAS mata kuliah **Natural Language Processing (NLP)** Se
 ---
 
 <p align="center">
-  Dibuat dengan ❤️ menggunakan <strong>Python</strong>, <strong>IndoBERT</strong>, dan <strong>Streamlit</strong>
+  Dibuat menggunakan <strong>Python</strong>, <strong>IndoBERT</strong>, dan <strong>Streamlit</strong>
 </p>
