@@ -1,0 +1,66 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+*.manifest
+*.spec
+
+# ===== Virtual Environment =====
+.venv/
+venv/
+ENV/
+env/
+
+# ===== IDE / Editor =====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# ===== Jupyter Notebook =====
+.ipynb_checkpoints/
+
+# ===== OS Files =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== Model Files (too large for GitHub) =====
+models/
+indobert-ner-rekrutmen/
+indobert-ner-rekrutmen-final/
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.onnx
+*.h5
+
+# ===== Temporary Files =====
+temp_cv.jpg
+temp_cv.png
+*.tmp
+*.log
+nohup.out
+
+# ===== Data (optional, uncomment if dataset is too large) =====
+# dataset_rekrutmen_sintetis.json
+
+# ===== Cloudflare / Tunnel =====
+cloudflared
+cloudflared.exe
+
+# ===== Zip / Archive =====
+*.zip
+*.tar.gz
+*.rar
