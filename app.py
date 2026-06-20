@@ -841,8 +841,11 @@ with st.sidebar:
         <div class="pipeline-info-desc">Dual-engine: Tesseract v5 + PaddleOCR untuk ekstraksi teks maksimal dari gambar CV</div>
     </div>
     <div class="pipeline-info">
-        <div class="pipeline-info-title">2. 🏷️ NER Model</div>
-        <div class="pipeline-info-desc">IndoBERT fine-tuned untuk mengenali entitas keterampilan dan pengalaman dari teks Indonesia</div>
+        <div class="pipeline-info-title">2. 🏷️ Dual NER Models</div>
+        <div class="pipeline-info-desc">
+            - <strong>WikiANN Model</strong>: Ekstraksi Nama, Institusi, dan Lokasi kandidat.<br>
+            - <strong>Rekrutmen Model</strong>: Ekstraksi Keterampilan (Skills) dan Jabatan profesional.
+        </div>
     </div>
     <div class="pipeline-info">
         <div class="pipeline-info-title">3. 🧬 Semantic Matching</div>
@@ -857,7 +860,8 @@ with st.sidebar:
     st.markdown("""
     <div>
         <span class="tech-badge">🤗 Transformers</span>
-        <span class="tech-badge">🔤 IndoBERT</span>
+        <span class="tech-badge">🔤 WikiANN-BERT</span>
+        <span class="tech-badge">🔤 IndoBERT-NER</span>
         <span class="tech-badge">📐 Sentence-BERT</span>
         <span class="tech-badge">👁️ PaddleOCR</span>
         <span class="tech-badge">🔍 Tesseract</span>
@@ -879,13 +883,15 @@ with st.sidebar:
 # ==========================================
 @st.cache_resource
 def load_models():
-    ner_model_path = "./models/indobert-ner-rekrutmen-final"
-    ner_pipe = pipeline("ner", model=ner_model_path, aggregation_strategy="simple")
+    wikiann_path = "./models/final_wikiann_model"
+    rekrutmen_path = "./models/indobert-ner-rekrutmen-final"
+    wikiann_pipe = pipeline("ner", model=wikiann_path, aggregation_strategy="simple")
+    rekrutmen_pipe = pipeline("ner", model=rekrutmen_path, aggregation_strategy="simple")
     embedder = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
-    return ner_pipe, embedder
+    return wikiann_pipe, rekrutmen_pipe, embedder
 
 with st.spinner("⏳ Memuat model AI..."):
-    ner_pipe, embedder = load_models()
+    wikiann_pipe, rekrutmen_pipe, embedder = load_models()
 
 # ==========================================
 # HERO SECTION
@@ -903,7 +909,7 @@ with hero_col2:
         <div class="hero-badge">✨ AI-Powered Recruitment System</div>
         <h1 class="hero-title">Smart Talent Matching</h1>
         <p class="hero-subtitle">
-            Ekstraksi keterampilan dari CV menggunakan <strong>OCR</strong> & <strong>NER</strong>, 
+            Ekstraksi profil dan keterampilan menggunakan <strong>OCR</strong> & <strong>Dual NER Models</strong>, 
             lalu cocokkan dengan kriteria lowongan menggunakan <strong>Semantic AI</strong>
         </p>
     </div>
@@ -1040,10 +1046,144 @@ if uploaded_file and process_btn:
     """, unsafe_allow_html=True)
 
     # PHASE 2: NER
-    with st.spinner("🏷️ Menganalisis entitas penting (NER)..."):
-        entities = ner_pipe(raw_text)
-        extracted_skills = [ent['word'] for ent in entities if 'KETERAMPILAN' in ent['entity_group'].upper()]
+    with st.spinner("🏷️ Menganalisis entitas penting (Dual NER)..."):
+        entities_wiki = wikiann_pipe(raw_text)
+        entities_rek = rekrutmen_pipe(raw_text)
+        
+        # Helper untuk membersihkan spasi subword (##)
+        def clean_entity_word(w: str) -> str:
+            w = w.replace(" ##", "").replace("##", "")
+            return " ".join(w.split())
+
+        def process_extracted_entities(ents, label_filter, is_wiki=False):
+            # Stopwords & noisy words yang sering disalahpahami oleh model sebagai keterampilan
+            blacklist_skills = {
+                'aplikasi', 'web', 'sistem', 'berbasis', 'pengembangan', 'untuk', 'perusahaan', 
+                'bahasa', 'pemrograman', 'waktu', 'it', 'organisasi', 'analisis', 'kelompok', 
+                'masa', 'tantangan', 'efek', 'masalah', 'perkembangan', 'akhir', '00', 'dan', 
+                'yang', 'atau', 'dengan', 'dalam', 'dari', 'pada', 'adalah', 'sebagai', 'oleh', 
+                'saya', 'kami', 'mereka', 'dia', 'kamu', 'anda', 'kita', 'tugas', 'proyek', 
+                'menggunakan', 'membuat', 'melakukan', 'kerja', 'tim', 'komunikasi', 'efektif', 
+                'manajemen', 'studi', 'kasus', 'sekolah', 'kuliah', 'jurusan', 'informatika', 
+                'indonesia', 'buku', 'serta', 'dapat', 'bisa', 'akan', 'telah', 'sudah', 'belum',
+                'hard', 'soft', 'skills', 'skill', 'software', 'berbasis web', 'web development',
+                'development', 'pemrogram', 'pemrogrammer', 'nat', 'ent', 'dar', 'jal', 'ac', 'id',
+                'informasi', 'internal', 'informasi internal', 'database', 'studio', 'studio code'
+            }
+            
+            valid_short_skills = {'go', 'c', 'r', 'js', 'c#', 'c++', 'db', 'qt', 'ip', 'ui', 'ux', 'php', 'sql'}
+
+            extracted = []
+            extracted_lower = set()
+            for ent in ents:
+                group = ent['entity_group'].upper()
+                word = ent['word'].strip()
+                word = clean_entity_word(word)
+                
+                # Filter karakter/simbol sampah
+                if not word or word in [":", "-", ",", ".", "/", "\\", "|", "•", "©", "®"] or len(word) <= 1:
+                    continue
+                    
+                word_lower = word.lower()
+                if is_wiki:
+                    is_match = False
+                    if label_filter == 'PER' and (any(x in group for x in ['LABEL_1', 'LABEL_2']) or 'PER' in group):
+                        is_match = True
+                    elif label_filter == 'ORG' and (any(x in group for x in ['LABEL_3', 'LABEL_4']) or 'ORG' in group):
+                        is_match = True
+                    elif label_filter == 'LOC' and (any(x in group for x in ['LABEL_5', 'LABEL_6']) or 'LOC' in group):
+                        is_match = True
+                        
+                    if is_match and word_lower not in extracted_lower:
+                        if word_lower not in ['universitas', 'sekolah', 'institut', 'lulusan', 'jurusan', 'fakultas']:
+                            extracted.append(word)
+                            extracted_lower.add(word_lower)
+                else:
+                    if label_filter in group:
+                        # Pembersihan khusus untuk kategori keterampilan
+                        if label_filter == 'KETERAMPILAN':
+                            # Cek blacklist
+                            if word_lower in blacklist_skills:
+                                continue
+                            # Cek panjang karakter minimum (<= 2) kecuali terdaftar sebagai skill valid
+                            if len(word) <= 2 and word_lower not in valid_short_skills:
+                                continue
+                        
+                        if word_lower not in extracted_lower:
+                            extracted.append(word)
+                            extracted_lower.add(word_lower)
+            return extracted
+
+        # Ekstrak data profil dari model WikiANN
+        names = process_extracted_entities(entities_wiki, 'PER', is_wiki=True)
+        institutions = process_extracted_entities(entities_wiki, 'ORG', is_wiki=True)
+        locations = process_extracted_entities(entities_wiki, 'LOC', is_wiki=True)
+
+        # Ekstrak data karir dari model Rekrutmen
+        extracted_skills = process_extracted_entities(entities_rek, 'KETERAMPILAN', is_wiki=False)
+        extracted_jobs = process_extracted_entities(entities_rek, 'JABATAN', is_wiki=False)
+
+        # Kamus Keterampilan Umum (Lexicon Match)
+        common_skills_lexicon = [
+            # Programming Languages & Web
+            'python', 'java', 'c++', 'c#', 'javascript', 'typescript', 'php', 'ruby', 'swift', 'kotlin', 'golang', 'rust', 'c', 'sql', 'r', 'dart',
+            'html', 'css', 'reactjs', 'react', 'vuejs', 'vue', 'angular', 'laravel', 'django', 'flask', 'spring', 'express', 'nodejs', 'nextjs', 'bootstrap', 'tailwind',
+            # Databases & Cloud
+            'mysql', 'postgresql', 'postgres', 'mongodb', 'redis', 'sqlite', 'mariadb', 'oracle', 'firebase',
+            # Tools & Software
+            'git', 'github', 'gitlab', 'docker', 'kubernetes', 'aws', 'gcp', 'azure', 'postman', 'vscode', 'visual studio code', 'figma',
+            # Data Science & AI
+            'machine learning', 'deep learning', 'nlp', 'natural language processing', 'ai', 'artificial intelligence', 'data analysis', 'data science', 'tensorflow', 'pytorch', 'keras', 'pandas', 'numpy', 'scikit-learn'
+        ]
+
+        # Scan teks OCR mentah secara langsung untuk mencocokkan keterampilan (mengatasi bias/error model NER)
+        raw_text_lower = raw_text.lower()
+        import re
+        
+        extracted_skills_lower = {s.lower() for s in extracted_skills}
+        
+        for skill in common_skills_lexicon:
+            # Menggunakan word boundary kecuali untuk yang mengandung simbol khusus seperti c++, c#
+            if '+' in skill or '#' in skill:
+                if skill in raw_text_lower:
+                    idx = raw_text_lower.find(skill)
+                    orig_skill = raw_text[idx:idx+len(skill)].strip()
+                    if orig_skill and orig_skill.lower() not in extracted_skills_lower:
+                        extracted_skills.append(orig_skill)
+                        extracted_skills_lower.add(orig_skill.lower())
+            else:
+                pattern = rf'\b{re.escape(skill)}\b'
+                matches = list(re.finditer(pattern, raw_text_lower))
+                if matches:
+                    idx = matches[0].start()
+                    orig_skill = raw_text[idx:idx+len(skill)].strip()
+                    
+                    # Normalisasi kapitalisasi agar seragam dan premium
+                    lower_name = orig_skill.lower()
+                    if lower_name in ['javascript', 'typescript', 'mongodb', 'postgresql', 'reactjs', 'vuejs', 'nextjs', 'vscode', 'postman']:
+                        cap_map = {
+                            'javascript': 'JavaScript', 'typescript': 'TypeScript', 'mongodb': 'MongoDB',
+                            'postgresql': 'PostgreSQL', 'reactjs': 'ReactJS', 'vuejs': 'Vue.js',
+                            'nextjs': 'Next.js', 'vscode': 'VS Code', 'postman': 'Postman'
+                        }
+                        orig_skill = cap_map.get(lower_name, orig_skill)
+                    elif len(orig_skill) <= 4:
+                        orig_skill = orig_skill.upper() # e.g. php -> PHP, sql -> SQL, html -> HTML
+                    else:
+                        orig_skill = orig_skill.capitalize() # e.g. python -> Python, laravel -> Laravel
+                        
+                    # Hapus versi lowercase dari model NER jika ditemukan (agar digantikan versi standard case yang rapi)
+                    if orig_skill.lower() in extracted_skills_lower:
+                        for idx, s in enumerate(extracted_skills):
+                            if s.lower() == orig_skill.lower():
+                                extracted_skills.pop(idx)
+                                break
+                    
+                    extracted_skills.append(orig_skill)
+                    extracted_skills_lower.add(orig_skill.lower())
+
         cv_summary = " ".join(extracted_skills)
+        entities = entities_wiki + entities_rek
 
     # Progress pipeline - Matching active
     st.markdown("""
@@ -1062,11 +1202,12 @@ if uploaded_file and process_btn:
 
     # PHASE 3: Embedding & Matching
     with st.spinner("🧬 Menghitung skor kecocokan (Embedding)..."):
-        if not cv_summary:
-            st.error("⚠️ Model NER tidak menemukan entitas keterampilan pada CV ini. Coba upload CV dengan keterampilan yang lebih jelas.")
+        if not raw_text.strip():
+            st.error("⚠️ Teks CV kosong atau tidak dapat dibaca oleh OCR. Silakan unggah gambar CV yang lebih jelas.")
         else:
             job_embedding = embedder.encode(job_desc, convert_to_tensor=True)
-            cv_embedding = embedder.encode(cv_summary, convert_to_tensor=True)
+            # Mencocokkan teks CV utuh dengan lowongan secara universal untuk mendukung semua bidang
+            cv_embedding = embedder.encode(raw_text.strip(), convert_to_tensor=True)
             cosine_scores = util.cos_sim(cv_embedding, job_embedding)
             match_percentage = cosine_scores[0][0].item() * 100
 
@@ -1152,28 +1293,71 @@ if uploaded_file and process_btn:
                 """, unsafe_allow_html=True)
 
             with res_col2:
-                # Skills extracted
+                # Biographical Card (WikiANN)
+                candidate_name = ", ".join(names) if names else "Tidak Terdeteksi"
+                candidate_inst = ", ".join(institutions) if institutions else "Tidak Terdeteksi"
+                candidate_loc = ", ".join(locations) if locations else "Tidak Terdeteksi"
+                
                 st.markdown(f"""
-                <div class="glass-card" style="animation-delay: 0.2s">
+                <div class="glass-card" style="animation-delay: 0.15s">
+                    <div class="card-header">
+                        <div class="card-icon card-icon-blue">👤</div>
+                        <div>
+                            <p class="card-title">Profil Pelamar</p>
+                            <p class="card-subtitle">Entitas profil diekstrak oleh WikiANN Model</p>
+                        </div>
+                    </div>
+                    <div style="font-size: 0.9rem; line-height: 1.8; color: var(--text-primary);">
+                        <strong>👤 Nama:</strong> {candidate_name}<br>
+                        <strong>🏢 Universitas/Institusi:</strong> {candidate_inst}<br>
+                        <strong>📍 Lokasi:</strong> {candidate_loc}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                # Skills & Jobs Card (Rekrutmen Model)
+                st.markdown(f"""
+                <div class="glass-card" style="animation-delay: 0.25s">
                     <div class="card-header">
                         <div class="card-icon card-icon-emerald">🏷️</div>
                         <div>
-                            <p class="card-title">Keterampilan Terdeteksi</p>
-                            <p class="card-subtitle">{len(extracted_skills)} entitas diekstrak oleh NER</p>
+                            <p class="card-title">Keterampilan & Pengalaman Kerja</p>
+                            <p class="card-subtitle">{len(extracted_skills)} keterampilan & {len(extracted_jobs)} jabatan terdeteksi</p>
                         </div>
                     </div>
-                    <div class="skills-container">
                 """, unsafe_allow_html=True)
+                
+                if extracted_jobs:
+                    st.markdown("""
+                    <div style="font-size: 0.82rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; margin-top: 10px;">
+                        💼 POSISI / JABATAN TERDETEKSI:
+                    </div>
+                    """, unsafe_allow_html=True)
+                    job_chips = ""
+                    for i, job in enumerate(extracted_jobs):
+                        delay = f"animation-delay: {0.05 * (i+1)}s"
+                        job_chips += f'<span class="skill-chip chip-pink" style="{delay}">💼 {job}</span>'
+                    st.markdown(f'<div class="skills-container">{job_chips}</div>', unsafe_allow_html=True)
 
-                chip_colors = ["chip-purple", "chip-pink", "chip-blue", "chip-cyan", "chip-emerald"]
+                st.markdown("""
+                <div style="font-size: 0.82rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; margin-top: 15px;">
+                    ⚡ KETERAMPILAN TERDETEKSI:
+                </div>
+                """, unsafe_allow_html=True)
+                
+                chip_colors = ["chip-purple", "chip-blue", "chip-cyan", "chip-emerald"]
                 chips_html = ""
                 for i, skill in enumerate(extracted_skills):
                     color = chip_colors[i % len(chip_colors)]
-                    delay = f"animation-delay: {0.1 * (i+1)}s"
+                    delay = f"animation-delay: {0.05 * (i+1)}s"
                     chips_html += f'<span class="skill-chip {color}" style="{delay}">⚡ {skill}</span>'
 
+                if not extracted_skills:
+                    chips_html = '<span style="color: var(--text-muted); font-size: 0.85rem; font-style: italic;">Tidak ada keterampilan terdeteksi</span>'
+
                 st.markdown(f"""
-                    {chips_html}
+                    <div class="skills-container">
+                        {chips_html}
                     </div>
                 </div>
                 """, unsafe_allow_html=True)

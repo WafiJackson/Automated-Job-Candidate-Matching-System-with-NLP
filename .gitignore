@@ -39,6 +39,8 @@ desktop.ini
 models/
 indobert-ner-rekrutmen/
 indobert-ner-rekrutmen-final/
+wikiann/
+final_wikiann_model/
 *.safetensors
 *.bin
 *.pt
