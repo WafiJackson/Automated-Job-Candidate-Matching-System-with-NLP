@@ -97,8 +97,9 @@ def process_extracted_entities(ents, label_filter, is_wiki=False):
                 
             if is_match and word_lower not in extracted_lower:
                 if word_lower not in ['universitas', 'sekolah', 'institut', 'lulusan', 'jurusan', 'fakultas']:
-                    extracted.append(word)
-                    extracted_lower.add(word_lower)
+                    if len(word.split()) <= 7:  # Mencegah halusinasi WikiANN membaca 1 paragraf sebagai nama
+                        extracted.append(word)
+                        extracted_lower.add(word_lower)
         else:
             if label_filter in group:
                 # Threshold confidence per kategori
@@ -113,8 +114,9 @@ def process_extracted_entities(ents, label_filter, is_wiki=False):
                         continue
                 
                 if word_lower not in extracted_lower:
-                    extracted.append(word)
-                    extracted_lower.add(word_lower)
+                    if len(word.split()) <= 7:  # Mencegah halusinasi jabatan yang terlalu panjang
+                        extracted.append(word)
+                        extracted_lower.add(word_lower)
     return extracted
 
 def segment_cv(raw_text):
@@ -282,10 +284,12 @@ def calculate_similarity(extracted_jobs, extracted_skills, job_desc, raw_text, e
     """
     Menghitung skor kecocokan menggunakan Bi-Encoder (Cosine Similarity) dan Cross-Encoder.
     """
-    cv_structured_text = f"Keterampilan pelamar: {', '.join(extracted_skills)}. Pengalaman dan Jabatan: {', '.join(extracted_jobs)}."
+    # Gabungkan summary CV asli agar model Cross-Encoder punya konteks kalimat alami
+    cv_context = raw_text.strip()[:600].replace('\n', ' ')
+    cv_structured_text = f"Profil Singkat Pelamar: {cv_context}... Keterampilan Utama: {', '.join(extracted_skills)}. Jabatan Terdeteksi: {', '.join(extracted_jobs)}."
     
     if not extracted_jobs and not extracted_skills:
-        cv_structured_text = raw_text.strip()[:500]
+        cv_structured_text = raw_text.strip()[:600]
 
     # --- 1. Bi-Encoder (Cosine Similarity) ---
     job_embedding = embedder.encode(job_desc, convert_to_tensor=True)
