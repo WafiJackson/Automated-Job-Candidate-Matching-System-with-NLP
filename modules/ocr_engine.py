@@ -8,8 +8,10 @@ def _get_ocr():
     """Mengembalikan instance PaddleOCR, dibuat hanya sekali (lazy init)."""
     global _ocr_instance
     if _ocr_instance is None:
+        import os
+        os.environ["PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK"] = "True"
         from paddleocr import PaddleOCR
-        _ocr_instance = PaddleOCR(use_angle_cls=True, lang='id', enable_mkldnn=False)
+        _ocr_instance = PaddleOCR(use_angle_cls=True, lang='id', enable_mkldnn=False, show_log=False)
     return _ocr_instance
 
 def extract_text_from_image(image_path):
