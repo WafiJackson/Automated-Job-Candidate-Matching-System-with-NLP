@@ -18,6 +18,14 @@ def load_ai_models():
     
     return wikiann_pipe, rekrutmen_pipe, embedder
 
+COMMON_SKILLS_LEXICON = [
+    'python', 'java', 'c++', 'c#', 'javascript', 'typescript', 'php', 'ruby', 'swift', 'kotlin', 'golang', 'rust', 'c', 'sql', 'r', 'dart',
+    'html', 'css', 'reactjs', 'react', 'vuejs', 'vue', 'angular', 'laravel', 'django', 'flask', 'spring', 'express', 'nodejs', 'nextjs', 'bootstrap', 'tailwind',
+    'mysql', 'postgresql', 'postgres', 'mongodb', 'redis', 'sqlite', 'mariadb', 'oracle', 'firebase',
+    'git', 'github', 'gitlab', 'docker', 'kubernetes', 'aws', 'gcp', 'azure', 'postman', 'vscode', 'visual studio code', 'figma',
+    'machine learning', 'deep learning', 'nlp', 'natural language processing', 'ai', 'artificial intelligence', 'data analysis', 'data science', 'tensorflow', 'pytorch', 'keras', 'pandas', 'numpy', 'scikit-learn'
+]
+
 def clean_entity_word(w: str) -> str:
     w = w.replace(" ##", "").replace("##", "")
     return " ".join(w.split())
@@ -35,7 +43,16 @@ def process_extracted_entities(ents, label_filter, is_wiki=False):
         'indonesia', 'buku', 'serta', 'dapat', 'bisa', 'akan', 'telah', 'sudah', 'belum',
         'hard', 'soft', 'skills', 'skill', 'software', 'berbasis web', 'web development',
         'development', 'pemrogram', 'pemrogrammer', 'nat', 'ent', 'dar', 'jal', 'ac', 'id',
-        'informasi', 'internal', 'informasi internal', 'database', 'studio', 'studio code'
+        'informasi', 'internal', 'informasi internal', 'database', 'studio', 'studio code',
+        # English Stopwords & Noise
+        'and', 'the', 'with', 'for', 'you', 'are', 'is', 'from', 'have', 'has', 'was', 'this', 
+        'that', 'which', 'using', 'new', 'team', 'work', 'experience', 'years', 'master', 
+        'advanced', 'knowledge', 'proven', 'track', 'record', 'of', 'at', 'in', 'on', 'by',
+        'to', 'as', 'an', 'a', 'or', 'not', 'be', 'it', 'can', 'will', 'all', 'any', 'other',
+        'some', 'such', 'more', 'most', 'very', 'too', 'also', 'only', 'even', 'just', 'then',
+        'than', 'so', 'if', 'but', 'because', 'while', 'where', 'when', 'how', 'why', 'what',
+        'who', 'whom', 'whose', 'which', 'whether', 'whose', 'whoever', 'whomever', 'whatever',
+        'whichever', 'whenever', 'wherever', 'however', 'whyever', 'help', 'hancv', 'mar', 'st'
     }
     
     valid_short_skills = {'go', 'c', 'r', 'js', 'c#', 'c++', 'db', 'qt', 'ip', 'ui', 'ux', 'php', 'sql'}
@@ -113,13 +130,7 @@ def run_ner_extraction(raw_text, wikiann_pipe, rekrutmen_pipe):
     extracted_jobs = process_extracted_entities(entities_rek, 'JABATAN', is_wiki=False)
 
     # Kamus Keterampilan Umum (Lexicon Match)
-    common_skills_lexicon = [
-        'python', 'java', 'c++', 'c#', 'javascript', 'typescript', 'php', 'ruby', 'swift', 'kotlin', 'golang', 'rust', 'c', 'sql', 'r', 'dart',
-        'html', 'css', 'reactjs', 'react', 'vuejs', 'vue', 'angular', 'laravel', 'django', 'flask', 'spring', 'express', 'nodejs', 'nextjs', 'bootstrap', 'tailwind',
-        'mysql', 'postgresql', 'postgres', 'mongodb', 'redis', 'sqlite', 'mariadb', 'oracle', 'firebase',
-        'git', 'github', 'gitlab', 'docker', 'kubernetes', 'aws', 'gcp', 'azure', 'postman', 'vscode', 'visual studio code', 'figma',
-        'machine learning', 'deep learning', 'nlp', 'natural language processing', 'ai', 'artificial intelligence', 'data analysis', 'data science', 'tensorflow', 'pytorch', 'keras', 'pandas', 'numpy', 'scikit-learn'
-    ]
+    common_skills_lexicon = COMMON_SKILLS_LEXICON
 
     raw_text_lower = raw_text.lower()
     extracted_skills_lower = {s.lower() for s in extracted_skills}
@@ -200,15 +211,19 @@ def calculate_similarity(extracted_jobs, extracted_skills, job_desc, raw_text, e
     cv_embedding = embedder.encode(cv_structured_text, convert_to_tensor=True)
     cosine_score = util.cos_sim(cv_embedding, job_embedding)[0][0].item() * 100
 
-    # --- Komponen 2: Keyword Match / Jaccard (40%) ---
-    # Ekstrak kata bermakna dari job description (filter stopwords singkat)
-    job_words = set(re.findall(r'\b[a-zA-Z0-9+#]{2,}\b', job_desc.lower()))
-    cv_words = set(re.findall(r'\b[a-zA-Z0-9+#]{2,}\b', ' '.join(extracted_skills + extracted_jobs).lower()))
-
-    if job_words:
-        keyword_score = (len(job_words & cv_words) / len(job_words)) * 100
+    # --- Komponen 2: Keyword Match (40%) ---
+    # Alih-alih membandingkan dengan semua kata di job desc, kita hanya mencari 
+    # skill yang benar-benar disebutkan di job desc, dan mengecek apakah CV memilikinya.
+    job_desc_lower = job_desc.lower()
+    job_required_skills = [s for s in COMMON_SKILLS_LEXICON if s in job_desc_lower]
+    
+    cv_raw_lower = raw_text.lower()
+    if job_required_skills:
+        overlap = [s for s in job_required_skills if s in cv_raw_lower]
+        keyword_score = (len(overlap) / len(job_required_skills)) * 100.0
     else:
-        keyword_score = 0.0
+        # Jika job_desc tidak memiliki skill eksplisit dari lexicon, fallback ke cosine
+        keyword_score = cosine_score
 
     # --- Skor Akhir Hybrid ---
     hybrid_score = (0.6 * cosine_score) + (0.4 * keyword_score)
