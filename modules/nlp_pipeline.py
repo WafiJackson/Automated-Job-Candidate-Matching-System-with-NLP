@@ -86,7 +86,7 @@ def run_ner_extraction(raw_text, wikiann_pipe, rekrutmen_pipe):
     
     # Memecah teks menjadi chunk agar tidak melebihi batas 512 token BERT
     words = raw_text.split()
-    chunk_size = 300  # Aman di bawah batas 512 subword tokens
+    chunk_size = 150  # Diturunkan dari 300 ke 150 karena 1 kata bisa dipecah menjadi beberapa subword (WordPiece Tokenizer)
     chunks = [" ".join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size)]
     
     entities_wiki = []
