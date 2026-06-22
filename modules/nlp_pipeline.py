@@ -83,8 +83,18 @@ def process_extracted_entities(ents, label_filter, is_wiki=False):
 
 def run_ner_extraction(raw_text, wikiann_pipe, rekrutmen_pipe):
     """Menjalankan ekstraksi NER pada teks mentah dan membersihkannya."""
-    entities_wiki = wikiann_pipe(raw_text)
-    entities_rek = rekrutmen_pipe(raw_text)
+    
+    # Memecah teks menjadi chunk agar tidak melebihi batas 512 token BERT
+    words = raw_text.split()
+    chunk_size = 300  # Aman di bawah batas 512 subword tokens
+    chunks = [" ".join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size)]
+    
+    entities_wiki = []
+    entities_rek = []
+    for chunk in chunks:
+        if chunk.strip():
+            entities_wiki.extend(wikiann_pipe(chunk))
+            entities_rek.extend(rekrutmen_pipe(chunk))
 
     # Ekstrak data profil dari model WikiANN
     names = process_extracted_entities(entities_wiki, 'PER', is_wiki=True)
