@@ -1013,7 +1013,7 @@ with col2:
         if uploaded_file.name.lower().endswith(".pdf"):
             st.info(f"📄 PDF Uploaded: {uploaded_file.name}")
         else:
-            st.image(uploaded_file, caption="Preview CV", use_container_width=True)
+            st.image(uploaded_file, caption="Preview CV", use_column_width=True)
 
 # ==========================================
 # PROCESS BUTTON
@@ -1022,7 +1022,7 @@ st.markdown("<br>", unsafe_allow_html=True)
 
 btn_col1, btn_col2, btn_col3 = st.columns([1, 2, 1])
 with btn_col2:
-    process_btn = st.button("🚀 Proses CV & Hitung Kecocokan", use_container_width=True, disabled=not uploaded_file)
+    process_btn = st.button("🚀 Proses CV & Hitung Kecocokan", disabled=not uploaded_file)
 
 # ==========================================
 # PROCESSING PIPELINE
