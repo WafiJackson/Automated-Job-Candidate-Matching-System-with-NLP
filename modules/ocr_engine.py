@@ -13,18 +13,21 @@ def _get_ocr():
     return _ocr_instance
 
 def extract_text_from_image(image_path):
-    # 1. Ekstraksi via Tesseract OCR v5
-    img = cv2.imread(image_path)
-    text_tesseract = pytesseract.image_to_string(img, lang='ind+eng')
-
-    # 2. Ekstraksi via PaddleOCR (dimuat saat pertama kali dipanggil)
+    # Ekstraksi Utama via PaddleOCR (Lebih baik untuk dokumen terstruktur)
     ocr_paddle = _get_ocr()
     result = ocr_paddle.ocr(image_path)
     text_paddle = ""
     if result and result[0]:
         text_paddle = " ".join([line[1][0] for line in result[0]])
 
-    # Strategi Ensemble Sederhana:
-    # Kita gabungkan teksnya, biarkan model NER yang menyaring mana teks yang relevan
-    combined_text = text_tesseract + "\n" + text_paddle
-    return combined_text
+    # Strategi Fallback
+    # Jika PaddleOCR berhasil dan teks cukup panjang, kembalikan langsung untuk mencegah duplikasi
+    if len(text_paddle.strip()) > 50:
+        return text_paddle
+
+    # Ekstraksi Cadangan via Tesseract OCR v5
+    img = cv2.imread(image_path)
+    text_tesseract = pytesseract.image_to_string(img, lang='ind+eng')
+
+    # Jika PaddleOCR sangat pendek, gabungkan dengan Tesseract (atau gunakan Tesseract saja)
+    return text_paddle + "\n" + text_tesseract if text_paddle else text_tesseract
