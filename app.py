@@ -964,14 +964,27 @@ with col1:
     # Dictionary posisi pekerjaan beserta deskripsi kriterianya
     predefined_jobs = {
         "✏️ Kustom (Tulis Sendiri)": "",
-        "💻 Data Scientist": "Mencari Data Scientist yang menguasai Python, SQL, Machine Learning, Deep Learning, NLP, TensorFlow, PyTorch, Pandas, NumPy, dan analisis data statistik.",
-        "🌐 Frontend Developer": "Mencari Frontend Developer yang ahli menggunakan HTML, CSS, JavaScript, ReactJS, Next.js, TypeScript, Tailwind CSS, dan memahami prinsip UI/UX.",
-        "🔧 Backend Developer": "Mencari Backend Developer yang menguasai Node.js, Python, Golang, PostgreSQL, MySQL, REST API, Docker, dan arsitektur Microservices.",
-        "📱 Mobile Developer": "Mencari Mobile Developer yang berpengalaman dengan Flutter, Dart, React Native, Firebase, REST API, dan pengembangan aplikasi Android maupun iOS.",
-        "🎨 UI/UX Designer": "Mencari desainer yang mahir menggunakan Figma, Adobe XD, membuat wireframe, prototyping interaktif, dan riset pengguna (user research).",
-        "☁️ DevOps Engineer": "Mencari DevOps Engineer yang menguasai Docker, Kubernetes, AWS, GCP, Azure, CI/CD pipeline, Linux, dan otomatisasi infrastruktur.",
-        "🤖 Machine Learning Engineer": "Mencari Machine Learning Engineer yang berpengalaman membangun model ML, menguasai Python, Scikit-learn, TensorFlow, PyTorch, serta deployment model ke produksi.",
-        "🗄️ Database Administrator": "Mencari DBA yang menguasai MySQL, PostgreSQL, MongoDB, Redis, query optimization, database backup, dan manajemen keamanan basis data.",
+        # --- Data & AI ---
+        "💻 Data Scientist (Machine Learning)": "Mencari Data Scientist yang menguasai Python, SQL, Machine Learning, TensorFlow, PyTorch, dan Scikit-learn.",
+        "📊 Data Analyst (Visualization)": "Mencari Data Analyst yang ahli dalam SQL, Tableau, PowerBI, Excel, Looker, dan visualisasi data.",
+        "⚙️ Data Engineer (Pipeline)": "Mencari Data Engineer yang menguasai Python, SQL, Apache Spark, Hadoop, Airflow, dan ETL pipeline.",
+        
+        # --- Web Development ---
+        "🌐 Frontend Web (React/Next.js)": "Mencari Frontend Developer yang ahli menggunakan HTML, CSS, JavaScript, ReactJS, Next.js, dan Tailwind CSS.",
+        "🌐 Frontend Web (Vue/Nuxt)": "Mencari Frontend Developer yang menguasai HTML, CSS, JavaScript, Vue.js, Nuxt.js, dan Vuetify.",
+        "🔧 Backend Web (Node.js/TypeScript)": "Mencari Backend Developer yang mahir menggunakan Node.js, Express, TypeScript, MongoDB, dan REST API.",
+        "🔧 Backend Web (Python/Django/FastAPI)": "Mencari Backend Developer yang menguasai Python, Django, FastAPI, PostgreSQL, dan arsitektur RESTful.",
+        "🔧 Backend Web (PHP/Laravel)": "Mencari Backend Developer yang ahli dalam PHP, framework Laravel, MySQL, dan konsep MVC.",
+        "🔧 Backend Web (Golang)": "Mencari Backend Developer yang berpengalaman dengan Golang, arsitektur Microservices, gRPC, dan Docker.",
+        
+        # --- Mobile Development ---
+        "📱 Mobile Dev (Flutter)": "Mencari Mobile Developer yang mahir menggunakan Flutter, Dart, Firebase, dan integrasi REST API untuk Android & iOS.",
+        "📱 Mobile Dev (Android Native)": "Mencari Android Developer yang menguasai Kotlin, Java, Android Studio, dan Jetpack Compose.",
+        "📱 Mobile Dev (iOS Native)": "Mencari iOS Developer yang ahli dalam pemrograman Swift, Objective-C, Xcode, dan SwiftUI.",
+        
+        # --- Infrastructure & Design ---
+        "☁️ DevOps Engineer (AWS/Docker)": "Mencari DevOps Engineer yang menguasai Docker, Kubernetes, layanan cloud AWS/GCP/Azure, dan CI/CD pipeline.",
+        "🎨 UI/UX Designer (Figma)": "Mencari UI/UX Designer yang mahir menggunakan Figma, Adobe XD, membuat wireframe, dan melakukan riset pengguna."
     }
 
     selected_job = st.selectbox(
@@ -1170,7 +1183,7 @@ if uploaded_file and process_btn:
                             </svg>
                             <div class="gauge-inner">
                                 <div class="gauge-value">{match_percentage:.1f}%</div>
-                                <div class="gauge-label">Kecocokan (Cross-Encoder)</div>
+                                <div class="gauge-label">Kecocokan (AI Blended Score)</div>
                             </div>
                         </div>
                 <div class="metrics-row delay-2">
