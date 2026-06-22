@@ -82,18 +82,23 @@ def process_extracted_entities(ents, label_filter, is_wiki=False):
     return extracted
 
 def run_ner_extraction(raw_text, wikiann_pipe, rekrutmen_pipe):
-    """Menjalankan ekstraksi NER pada teks mentah dan membersihkannya."""
+    """Menjalankan ekstraksi NER secara optimal."""
     
-    # Memecah teks menjadi chunk agar tidak melebihi batas 512 token BERT
     words = raw_text.split()
-    chunk_size = 150  # Diturunkan dari 300 ke 150 karena 1 kata bisa dipecah menjadi beberapa subword (WordPiece Tokenizer)
+    
+    # OPTIMASI 1: WikiANN (Nama, Instansi, Lokasi) biasanya selalu ada di bagian atas CV.
+    # Kita tidak perlu memindai ribuan kata untuk mencari nama. Cukup pindai 200 kata pertama saja!
+    intro_text = " ".join(words[:200])
+    entities_wiki = wikiann_pipe(intro_text) if intro_text.strip() else []
+
+    # OPTIMASI 2: Rekrutmen (Skill, Jabatan) bisa tersebar di mana saja.
+    # Kita pecah menjadi chunk yang lebih optimal (220 kata) untuk meminimalisir looping.
+    chunk_size = 220
     chunks = [" ".join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size)]
     
-    entities_wiki = []
     entities_rek = []
     for chunk in chunks:
         if chunk.strip():
-            entities_wiki.extend(wikiann_pipe(chunk))
             entities_rek.extend(rekrutmen_pipe(chunk))
 
     # Ekstrak data profil dari model WikiANN
