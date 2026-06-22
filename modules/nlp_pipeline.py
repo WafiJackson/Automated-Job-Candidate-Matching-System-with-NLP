@@ -284,36 +284,43 @@ def calculate_similarity(extracted_jobs, extracted_skills, job_desc, raw_text, e
     """
     Menghitung skor kecocokan menggunakan Bi-Encoder (Cosine Similarity) dan Cross-Encoder.
     """
-    # Buat kalimat alami (Natural Language) dari entitas yang diekstrak murni
-    # Ini penting agar Cross-Encoder tidak menganggapnya sebagai teks sampah (noise)
-    jobs_str = ", ".join(extracted_jobs) if extracted_jobs else "profesional IT"
-    skills_str = ", ".join(extracted_skills) if extracted_skills else "kemampuan dasar"
-    cv_pure_text = f"Pelamar ini adalah seorang {jobs_str} yang ahli dan menguasai {skills_str}."
+    # 1. Bi-Encoder (Cosine Similarity) 
+    # Kita berikan Teks CV yang kaya (Rich Context) agar vektor Cosine bisa menangkap relasi kosakata yang luas
+    rich_cv_text = f"{raw_text.strip()[:1000]} Keterampilan Utama: {', '.join(extracted_skills)} Jabatan Terdeteksi: {', '.join(extracted_jobs)}"
     
-    if not extracted_jobs and not extracted_skills:
-        cv_pure_text = raw_text.strip()[:300]
-
-    # --- 1. Bi-Encoder (Cosine Similarity) ---
     job_embedding = embedder.encode(job_desc, convert_to_tensor=True)
-    cv_embedding = embedder.encode(cv_pure_text, convert_to_tensor=True)
+    cv_embedding = embedder.encode(rich_cv_text, convert_to_tensor=True)
     cosine_score = util.cos_sim(cv_embedding, job_embedding)[0][0].item() * 100
 
-    # --- 2. Cross-Encoder ---
+    # 2. Cross-Encoder
+    # MMARCO butuh kalimat alami, bukan teks mentah
+    jobs_str = ", ".join(extracted_jobs) if extracted_jobs else "profesional IT"
+    skills_str = ", ".join(extracted_skills) if extracted_skills else "kemampuan dasar"
+    cv_pure_text = f"Pelamar ini memiliki keahlian di bidang {skills_str}. Ia pernah menjabat sebagai {jobs_str}."
+    
     raw_cross_score = cross_encoder.predict([(job_desc, cv_pure_text)])[0]
     prob_score = torch.sigmoid(torch.tensor(raw_cross_score)).item() * 100
 
-    # --- 3. Keyword Bonus (Logika Ahli HRD) ---
-    # Berikan bonus langsung jika skill pelamar benar-benar ada di Job Desc
+    # 3. Exact Keyword Matching (HRD Logic)
+    # Ini sangat penting! Jika CV punya skill yang sama persis dengan loker, berikan bonus besar!
+    import re
     job_desc_lower = job_desc.lower()
-    match_count = sum(1 for skill in extracted_skills if skill.lower() in job_desc_lower)
-    keyword_bonus = min(25.0, match_count * 5.0) # Maksimal bonus 25%
+    match_count = 0
+    for skill in extracted_skills:
+        # Gunakan regex word boundary agar huruf "R" tidak terdeteksi di dalam kata "daRi"
+        pattern = r'\b' + re.escape(skill.lower()) + r'\b'
+        if re.search(pattern, job_desc_lower):
+            match_count += 1
+            
+    # Setiap skill yang cocok persis mendapat bonus 8%! (Maksimal bonus 40%)
+    keyword_bonus = min(40.0, match_count * 8.0) 
 
-    # --- 4. Blended Score (Kombinasi Sempurna) ---
-    # 50% Cosine, 50% Cross-Encoder, lalu ditambah Bonus Keyword pasti
-    adjusted_score = (cosine_score * 0.5) + (prob_score * 0.5) + keyword_bonus
+    # 4. Final Blended Score (Sesuai Permintaan User: Harus bisa mencapai 90%+)
+    # Kita prioritaskan Cosine (stabil) + Bonus Skill Mutlak. Cross-Encoder hanya pelengkap 10%.
+    adjusted_score = (cosine_score * 0.9) + (prob_score * 0.1) + keyword_bonus
     
     # Cap maksimal 99%
-    if adjusted_score > 99.0:
-        adjusted_score = 99.0
+    if adjusted_score > 99.5:
+        adjusted_score = 99.5
 
     return round(adjusted_score, 2), round(cosine_score, 2), match_count
