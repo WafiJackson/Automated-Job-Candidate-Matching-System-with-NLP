@@ -11,7 +11,7 @@ def _get_ocr():
         import os
         os.environ["PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK"] = "True"
         from paddleocr import PaddleOCR
-        _ocr_instance = PaddleOCR(use_angle_cls=True, lang='id', enable_mkldnn=False, show_log=False)
+        _ocr_instance = PaddleOCR(use_angle_cls=True, lang='id', enable_mkldnn=False)
     return _ocr_instance
 
 def extract_text_from_image(image_path):
