@@ -886,8 +886,8 @@ def load_models():
     return load_ai_models()
 
 try:
-    with st.spinner("⏳ Memuat model AI..."):
-        wikiann_pipe, rekrutmen_pipe, embedder = load_models()
+    with st.spinner("⏳ Memuat model AI (termasuk Cross-Encoder)..."):
+        wikiann_pipe, rekrutmen_pipe, embedder, cross_encoder = load_models()
 except FileNotFoundError as e:
     st.error(f"🚨 {str(e)}")
     st.stop()
@@ -1095,7 +1095,7 @@ if uploaded_file and process_btn:
         if not raw_text.strip():
             st.error("⚠️ Teks dokumen kosong atau tidak terbaca. Silakan unggah dokumen yang lebih jelas.")
         else:
-            match_percentage, cosine_score, keyword_score = calculate_similarity(extracted_jobs, extracted_skills, job_desc, raw_text, embedder)
+            match_percentage, cosine_score, keyword_score = calculate_similarity(extracted_jobs, extracted_skills, job_desc, raw_text, embedder, cross_encoder)
             contact_info = extract_contact_info(raw_text)
             # Final pipeline - all done
             st.markdown("""
@@ -1170,9 +1170,23 @@ if uploaded_file and process_btn:
                             </svg>
                             <div class="gauge-inner">
                                 <div class="gauge-value">{match_percentage:.1f}%</div>
-                                <div class="gauge-label">Kecocokan (Semantic)</div>
+                                <div class="gauge-label">Kecocokan (Cross-Encoder)</div>
                             </div>
                         </div>
+                <div class="metrics-row delay-2">
+                    <div class="metric-card">
+                        <div class="metric-value">{cosine_score}%</div>
+                        <div class="metric-label">Bi-Encoder (Cosine)</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">{len(extracted_skills)}</div>
+                        <div class="metric-label">Skill Cocok</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">{len(extracted_jobs)}</div>
+                        <div class="metric-label">Jabatan Dikenali</div>
+                    </div>
+                </div>
                         <div class="gauge-status {status_class}">{status_text}</div>
                     </div>
                 </div>

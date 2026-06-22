@@ -1,6 +1,7 @@
 import re
 from transformers import pipeline
-from sentence_transformers import SentenceTransformer, util
+from sentence_transformers import SentenceTransformer, CrossEncoder, util
+import torch
 
 import os
 
@@ -15,8 +16,9 @@ def load_ai_models():
     wikiann_pipe = pipeline("ner", model=wikiann_path, aggregation_strategy="first")
     rekrutmen_pipe = pipeline("ner", model=rekrutmen_path, aggregation_strategy="first")
     embedder = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+    cross_encoder = CrossEncoder('cross-encoder/mmarco-mMiniLMv2-L12-H384-v1')
     
-    return wikiann_pipe, rekrutmen_pipe, embedder
+    return wikiann_pipe, rekrutmen_pipe, embedder, cross_encoder
 
 COMMON_SKILLS_LEXICON = [
     'python', 'java', 'c++', 'c#', 'javascript', 'typescript', 'php', 'ruby', 'swift', 'kotlin', 'golang', 'rust', 'c', 'sql', 'r', 'dart',
@@ -276,23 +278,25 @@ def extract_contact_info(raw_text: str) -> dict:
 
     return {'email': email, 'phone': phone}
 
-def calculate_similarity(extracted_jobs, extracted_skills, job_desc, raw_text, embedder):
+def calculate_similarity(extracted_jobs, extracted_skills, job_desc, raw_text, embedder, cross_encoder):
     """
-    Menghitung skor kecocokan antara CV dan deskripsi pekerjaan menggunakan murni Semantic Match (Cosine Similarity).
-    Untuk akurasi maksimal, kita membuat ringkasan terstruktur berisi murni keahlian dan jabatan pelamar,
-    agar vektor maknanya (embedding) selaras dengan kriteria lowongan tanpa terdistorsi informasi kontak/alamat.
+    Menghitung skor kecocokan menggunakan Bi-Encoder (Cosine Similarity) dan Cross-Encoder.
     """
-    # --- Semantic Match (Cosine Similarity) ---
-    # Mengumpulkan semua skill (Lexicon + NER bersih) dan Jabatan menjadi satu teks yang padat informasi
     cv_structured_text = f"Keterampilan pelamar: {', '.join(extracted_skills)}. Pengalaman dan Jabatan: {', '.join(extracted_jobs)}."
     
-    # Fallback jika kosong
     if not extracted_jobs and not extracted_skills:
         cv_structured_text = raw_text.strip()[:500]
 
+    # --- 1. Bi-Encoder (Cosine Similarity) ---
     job_embedding = embedder.encode(job_desc, convert_to_tensor=True)
     cv_embedding = embedder.encode(cv_structured_text, convert_to_tensor=True)
     cosine_score = util.cos_sim(cv_embedding, job_embedding)[0][0].item() * 100
 
-    # Kembalikan cosine_score sebagai skor utama
-    return round(cosine_score, 2), round(cosine_score, 2), 0.0
+    # --- 2. Cross-Encoder (Lebih Akurat) ---
+    # CrossEncoder MMARCO mengembalikan logit. Kita ubah ke probabilitas dengan Sigmoid.
+    raw_cross_score = cross_encoder.predict([(job_desc, cv_structured_text)])[0]
+    # Terapkan sigmoid untuk mendapat rentang 0.0 - 1.0, lalu kalikan 100
+    prob_score = torch.sigmoid(torch.tensor(raw_cross_score)).item() * 100
+
+    # Kembalikan prob_score sebagai skor utama (sangat akurat), cosine sebagai perbandingan
+    return round(prob_score, 2), round(cosine_score, 2), 0.0
