@@ -89,8 +89,22 @@ def process_extracted_entities(ents, label_filter, is_wiki=False):
                     # Cek blacklist
                     if word_lower in blacklist_skills:
                         continue
-                    # Cek panjang karakter minimum (<= 2) kecuali terdaftar sebagai skill valid
-                    if len(word) <= 2 and word_lower not in valid_short_skills:
+                    # Cek panjang karakter minimum (<= 3) kecuali terdaftar sebagai skill valid
+                    if len(word) <= 3 and word_lower not in valid_short_skills:
+                        continue
+                    # Buang yang murni angka (seperti tahun)
+                    if word.isnumeric() or word_lower.startswith('20'):
+                        continue
+                    # Buang pecahan tokenizer yang aneh (berakhiran 'ion', 'ing' jika terlalu pendek)
+                    if len(word) <= 5 and (word_lower.endswith('ion') or word_lower.endswith('ing')):
+                        continue
+                    # Buang jika terdiri dari 1 huruf saja
+                    if len(word) <= 1:
+                        continue
+                elif label_filter == 'JABATAN':
+                    if word_lower in blacklist_skills or word.isnumeric():
+                        continue
+                    if len(word) <= 3:
                         continue
                 
                 if word_lower not in extracted_lower:
