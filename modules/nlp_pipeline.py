@@ -61,19 +61,30 @@ def process_extracted_entities(ents, label_filter, is_wiki=False):
     
     valid_short_skills = {'go', 'c', 'r', 'js', 'c#', 'c++', 'db', 'qt', 'ip', 'ui', 'ux', 'php', 'sql'}
 
+    # Threshold confidence score — hanya terima entitas yang modelnya yakin
+    # JABATAN: minimal 0.60, lainnya (NAMA, ORG, LOC): minimal 0.50
+    SCORE_THRESHOLD_JABATAN = 0.60
+    SCORE_THRESHOLD_OTHER   = 0.50
+
     extracted = []
     extracted_lower = set()
     for ent in ents:
         group = ent['entity_group'].upper()
+        score = ent.get('score', 1.0)
         word = ent['word'].strip()
         word = clean_entity_word(word)
         
-        # Filter karakter/simbol sampah
+        # Filter karakter/simbol sampah & subword fragment (##...)
         if not word or word in [":", "-", ",", ".", "/", "\\", "|", "•", "©", "®"] or len(word) <= 1:
+            continue
+        if word.startswith('#'):
             continue
             
         word_lower = word.lower()
         if is_wiki:
+            # WikiANN — minimal confidence
+            if score < SCORE_THRESHOLD_OTHER:
+                continue
             is_match = False
             if label_filter == 'PER' and (any(x in group for x in ['LABEL_1', 'LABEL_2']) or 'PER' in group):
                 is_match = True
@@ -88,24 +99,12 @@ def process_extracted_entities(ents, label_filter, is_wiki=False):
                     extracted_lower.add(word_lower)
         else:
             if label_filter in group:
-                # Pembersihan khusus untuk kategori keterampilan
-                if label_filter == 'KETERAMPILAN':
-                    # Cek blacklist
-                    if word_lower in blacklist_skills:
-                        continue
-                    # Cek panjang karakter minimum (<= 3) kecuali terdaftar sebagai skill valid
-                    if len(word) <= 3 and word_lower not in valid_short_skills:
-                        continue
-                    # Buang yang murni angka (seperti tahun)
-                    if word.isnumeric() or word_lower.startswith('20'):
-                        continue
-                    # Buang pecahan tokenizer yang aneh (berakhiran 'ion', 'ing' jika terlalu pendek)
-                    if len(word) <= 5 and (word_lower.endswith('ion') or word_lower.endswith('ing')):
-                        continue
-                    # Buang jika terdiri dari 1 huruf saja
-                    if len(word) <= 1:
-                        continue
-                elif label_filter == 'JABATAN':
+                # Threshold confidence per kategori
+                threshold = SCORE_THRESHOLD_JABATAN if label_filter == 'JABATAN' else SCORE_THRESHOLD_OTHER
+                if score < threshold:
+                    continue
+                
+                if label_filter == 'JABATAN':
                     if word_lower in blacklist_skills or word.isnumeric():
                         continue
                     if len(word) <= 3:
@@ -137,6 +136,12 @@ def run_ner_extraction(raw_text, wikiann_pipe, rekrutmen_pipe):
     for chunk in chunks:
         if chunk.strip():
             entities_rek.extend(rekrutmen_pipe(chunk))
+    
+    # -----------------------------------------------------------------------
+    # KETERAMPILAN: Gunakan HANYA Lexicon (Regex), BUKAN NER
+    # IndoBERT-Rekrutmen cenderung menandai kata kerja Indonesia sebagai skill.
+    # Lexicon jauh lebih presisi untuk deteksi skill IT/teknis.
+    # -----------------------------------------------------------------------
 
     # Ekstrak data profil dari model WikiANN
     names = process_extracted_entities(entities_wiki, 'PER', is_wiki=True)
@@ -144,7 +149,8 @@ def run_ner_extraction(raw_text, wikiann_pipe, rekrutmen_pipe):
     locations = process_extracted_entities(entities_wiki, 'LOC', is_wiki=True)
 
     # Ekstrak data karir dari model Rekrutmen
-    extracted_skills = process_extracted_entities(entities_rek, 'KETERAMPILAN', is_wiki=False)
+    # KETERAMPILAN: skip NER, pakai Lexicon saja (lihat blok di bawah)
+    extracted_skills = []  # akan diisi murni oleh Lexicon Regex di bawah
     extracted_jobs = process_extracted_entities(entities_rek, 'JABATAN', is_wiki=False)
 
     # Kamus Keterampilan Umum (Lexicon Match)
@@ -215,14 +221,19 @@ def extract_contact_info(raw_text: str) -> dict:
 def calculate_similarity(extracted_jobs, extracted_skills, job_desc, raw_text, embedder):
     """
     Menghitung skor kecocokan antara CV dan deskripsi pekerjaan menggunakan murni Semantic Match (Cosine Similarity).
-    Untuk menghindari hasil buruk dari NER, kita langsung membandingkan teks asli CV dengan kriteria lowongan.
+    Untuk akurasi maksimal, kita membuat ringkasan terstruktur berisi murni keahlian dan jabatan pelamar,
+    agar vektor maknanya (embedding) selaras dengan kriteria lowongan tanpa terdistorsi informasi kontak/alamat.
     """
     # --- Semantic Match (Cosine Similarity) ---
-    # Batasi raw_text maksimal 1000 karakter agar representasi embedding tetap fokus
-    cv_text_focus = raw_text.strip()[:1000]
+    # Mengumpulkan semua skill (Lexicon + NER bersih) dan Jabatan menjadi satu teks yang padat informasi
+    cv_structured_text = f"Keterampilan pelamar: {', '.join(extracted_skills)}. Pengalaman dan Jabatan: {', '.join(extracted_jobs)}."
+    
+    # Fallback jika kosong
+    if not extracted_jobs and not extracted_skills:
+        cv_structured_text = raw_text.strip()[:500]
 
     job_embedding = embedder.encode(job_desc, convert_to_tensor=True)
-    cv_embedding = embedder.encode(cv_text_focus, convert_to_tensor=True)
+    cv_embedding = embedder.encode(cv_structured_text, convert_to_tensor=True)
     cosine_score = util.cos_sim(cv_embedding, job_embedding)[0][0].item() * 100
 
     # Kembalikan cosine_score sebagai skor utama
