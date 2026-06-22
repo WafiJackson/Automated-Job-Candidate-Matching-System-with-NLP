@@ -12,8 +12,8 @@ def load_ai_models():
     if not os.path.exists(wikiann_path) or not os.path.exists(rekrutmen_path):
         raise FileNotFoundError("Model AI tidak ditemukan! Harap jalankan 'fine_tuning_ner.ipynb' terlebih dahulu dan simpan model di folder 'models/'.")
         
-    wikiann_pipe = pipeline("ner", model=wikiann_path, aggregation_strategy="simple")
-    rekrutmen_pipe = pipeline("ner", model=rekrutmen_path, aggregation_strategy="simple")
+    wikiann_pipe = pipeline("ner", model=wikiann_path, aggregation_strategy="first")
+    rekrutmen_pipe = pipeline("ner", model=rekrutmen_path, aggregation_strategy="first")
     embedder = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
     
     return wikiann_pipe, rekrutmen_pipe, embedder
