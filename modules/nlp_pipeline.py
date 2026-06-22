@@ -115,27 +115,84 @@ def process_extracted_entities(ents, label_filter, is_wiki=False):
                     extracted_lower.add(word_lower)
     return extracted
 
+def segment_cv(raw_text):
+    """
+    Memecah teks CV berdasarkan header yang umum (Pendidikan, Pengalaman, Keahlian).
+    """
+    sections = {
+        'PROFILE': '',
+        'EDUCATION': '',
+        'EXPERIENCE': '',
+        'SKILLS': '',
+        'UNKNOWN': ''
+    }
+    
+    # Pola regex untuk mendeteksi header (huruf kecil)
+    patterns = {
+        'EDUCATION': r'^(?:pendidikan|education|riwayat akademis|latar belakang pendidikan|edukasi)\b',
+        'EXPERIENCE': r'^(?:pengalaman|pengalaman kerja|work experience|riwayat pekerjaan|employment history|experience|karir)\b',
+        'SKILLS': r'^(?:keahlian|keterampilan|skills?|kompetensi|kemampuan|competencies)\b'
+    }
+    
+    current_section = 'PROFILE'
+    lines = raw_text.split('\n')
+    
+    for line in lines:
+        cleaned_line = line.strip().lower()
+        # Bersihkan karakter spesial di awal baris (misal bullet point '-')
+        header_check = re.sub(r'^[^a-z0-9]+', '', cleaned_line).strip()
+        
+        # Header umumnya adalah kalimat pendek (maksimal 4 kata)
+        if len(header_check.split()) <= 4 and header_check:
+            matched = False
+            for sec, pattern in patterns.items():
+                if re.match(pattern, header_check):
+                    current_section = sec
+                    matched = True
+                    break
+        
+        sections[current_section] += line + '\n'
+        
+    return sections
+
 def run_ner_extraction(raw_text, wikiann_pipe, rekrutmen_pipe):
     """Menjalankan ekstraksi NER secara optimal."""
     
-    words = raw_text.split()
+    sections = segment_cv(raw_text)
     
-    # OPTIMASI 1: WikiANN (Nama, Instansi, Lokasi) biasanya selalu ada di bagian atas CV.
-    # Kita tidak perlu memindai ribuan kata untuk mencari nama. Cukup pindai 200 kata pertama saja!
-    intro_text = " ".join(words[:200])
-    entities_wiki = wikiann_pipe(intro_text) if intro_text.strip() else []
-
-    # OPTIMASI 2: Rekrutmen (Skill, Jabatan) diproses maksimal 450 kata pertama saja (sekitar 2 halaman CV).
-    # Sisa kata di halaman-halaman terakhir tidak di-NER untuk menghemat waktu (karena sangat berat di CPU).
-    # Jangan khawatir, sistem Regex (Lexicon) di bawah akan tetap memindai 100% dari teks untuk mencari Skill.
-    ner_words = words[:450]
-    chunk_size = 225
-    chunks = [" ".join(ner_words[i:i + chunk_size]) for i in range(0, len(ner_words), chunk_size)]
+    # Cek apakah segmentasi berhasil (ada bagian selain PROFILE yang terisi)
+    is_segmented = any(len(sections[sec].strip()) > 0 for sec in ['EDUCATION', 'EXPERIENCE', 'SKILLS'])
     
+    entities_wiki = []
     entities_rek = []
-    for chunk in chunks:
-        if chunk.strip():
-            entities_rek.extend(rekrutmen_pipe(chunk))
+    
+    if is_segmented:
+        # OPTIMASI 1 (Segmented): WikiANN hanya untuk Profile dan Education
+        wiki_text = sections['PROFILE'] + "\n" + sections['EDUCATION']
+        wiki_words = wiki_text.split()[:300]
+        intro_text = " ".join(wiki_words)
+        entities_wiki = wikiann_pipe(intro_text) if intro_text.strip() else []
+        
+        # OPTIMASI 2 (Segmented): Rekrutmen hanya untuk Pengalaman dan Profile
+        rek_text = sections['EXPERIENCE'] + "\n" + sections['PROFILE']
+        ner_words = rek_text.split()[:450]
+        chunk_size = 225
+        chunks = [" ".join(ner_words[i:i + chunk_size]) for i in range(0, len(ner_words), chunk_size)]
+        for chunk in chunks:
+            if chunk.strip():
+                entities_rek.extend(rekrutmen_pipe(chunk))
+    else:
+        # FALLBACK: Logika 1D Memanjang jika CV tidak beraturan/tidak ada header
+        words = raw_text.split()
+        intro_text = " ".join(words[:200])
+        entities_wiki = wikiann_pipe(intro_text) if intro_text.strip() else []
+
+        ner_words = words[:450]
+        chunk_size = 225
+        chunks = [" ".join(ner_words[i:i + chunk_size]) for i in range(0, len(ner_words), chunk_size)]
+        for chunk in chunks:
+            if chunk.strip():
+                entities_rek.extend(rekrutmen_pipe(chunk))
     
     # -----------------------------------------------------------------------
     # KETERAMPILAN: Gunakan HANYA Lexicon (Regex), BUKAN NER
@@ -149,21 +206,22 @@ def run_ner_extraction(raw_text, wikiann_pipe, rekrutmen_pipe):
     locations = process_extracted_entities(entities_wiki, 'LOC', is_wiki=True)
 
     # Ekstrak data karir dari model Rekrutmen
-    # KETERAMPILAN: skip NER, pakai Lexicon saja (lihat blok di bawah)
-    extracted_skills = []  # akan diisi murni oleh Lexicon Regex di bawah
     extracted_jobs = process_extracted_entities(entities_rek, 'JABATAN', is_wiki=False)
+    extracted_skills = []  # akan diisi murni oleh Lexicon Regex di bawah
 
     # Kamus Keterampilan Umum (Lexicon Match)
     common_skills_lexicon = COMMON_SKILLS_LEXICON
 
-    raw_text_lower = raw_text.lower()
+    # Jika tersedimentasi, cukup cari skill di bagian relevan
+    skill_text = (sections['SKILLS'] + "\n" + sections['EXPERIENCE'] + "\n" + sections['PROFILE']) if is_segmented else raw_text
+    raw_text_lower = skill_text.lower()
     extracted_skills_lower = {s.lower() for s in extracted_skills}
     
     for skill in common_skills_lexicon:
         if '+' in skill or '#' in skill:
             if skill in raw_text_lower:
                 idx = raw_text_lower.find(skill)
-                orig_skill = raw_text[idx:idx+len(skill)].strip()
+                orig_skill = skill_text[idx:idx+len(skill)].strip()
                 if orig_skill and orig_skill.lower() not in extracted_skills_lower:
                     extracted_skills.append(orig_skill)
                     extracted_skills_lower.add(orig_skill.lower())
@@ -172,7 +230,7 @@ def run_ner_extraction(raw_text, wikiann_pipe, rekrutmen_pipe):
             matches = list(re.finditer(pattern, raw_text_lower))
             if matches:
                 idx = matches[0].start()
-                orig_skill = raw_text[idx:idx+len(skill)].strip()
+                orig_skill = skill_text[idx:idx+len(skill)].strip()
                 
                 lower_name = orig_skill.lower()
                 if lower_name in ['javascript', 'typescript', 'mongodb', 'postgresql', 'reactjs', 'vuejs', 'nextjs', 'vscode', 'postman']:
