@@ -210,13 +210,9 @@ def extract_contact_info(raw_text: str) -> dict:
 
 def calculate_similarity(extracted_jobs, extracted_skills, job_desc, raw_text, embedder):
     """
-    Menghitung skor kecocokan antara CV dan deskripsi pekerjaan menggunakan Hybrid Scoring.
-    
-    Skor Akhir = (60% x Cosine Similarity) + (40% x Keyword Match)
-    - Cosine Similarity: Mengukur kedekatan semantik secara keseluruhan.
-    - Keyword Match: Mengukur berapa persen kata kunci dari job desc yang benar-benar ada di CV.
+    Menghitung skor kecocokan antara CV dan deskripsi pekerjaan menggunakan Semantic Match (Cosine Similarity).
     """
-    # --- Komponen 1: Cosine Similarity (60%) ---
+    # --- Semantic Match (Cosine Similarity) ---
     cv_structured_text = f"Jabatan: {', '.join(extracted_jobs)}. Keterampilan: {', '.join(extracted_skills)}"
     if not extracted_jobs and not extracted_skills:
         cv_structured_text = raw_text.strip()[:500]
@@ -225,21 +221,5 @@ def calculate_similarity(extracted_jobs, extracted_skills, job_desc, raw_text, e
     cv_embedding = embedder.encode(cv_structured_text, convert_to_tensor=True)
     cosine_score = util.cos_sim(cv_embedding, job_embedding)[0][0].item() * 100
 
-    # --- Komponen 2: Keyword Match (40%) ---
-    # Alih-alih membandingkan dengan semua kata di job desc, kita hanya mencari 
-    # skill yang benar-benar disebutkan di job desc, dan mengecek apakah CV memilikinya.
-    job_desc_lower = job_desc.lower()
-    job_required_skills = [s for s in COMMON_SKILLS_LEXICON if s in job_desc_lower]
-    
-    cv_raw_lower = raw_text.lower()
-    if job_required_skills:
-        overlap = [s for s in job_required_skills if s in cv_raw_lower]
-        keyword_score = (len(overlap) / len(job_required_skills)) * 100.0
-    else:
-        # Jika job_desc tidak memiliki skill eksplisit dari lexicon, fallback ke cosine
-        keyword_score = cosine_score
-
-    # --- Skor Akhir Hybrid ---
-    hybrid_score = (0.6 * cosine_score) + (0.4 * keyword_score)
-
-    return round(hybrid_score, 2), round(cosine_score, 2), round(keyword_score, 2)
+    # Kembalikan cosine_score sebagai skor utama
+    return round(cosine_score, 2), round(cosine_score, 2), 0.0

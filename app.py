@@ -1170,7 +1170,7 @@ if uploaded_file and process_btn:
                             </svg>
                             <div class="gauge-inner">
                                 <div class="gauge-value">{match_percentage:.1f}%</div>
-                                <div class="gauge-label">Hybrid Score</div>
+                                <div class="gauge-label">Kecocokan (Semantic)</div>
                             </div>
                         </div>
                         <div class="gauge-status {status_class}">{status_text}</div>
@@ -1258,18 +1258,10 @@ if uploaded_file and process_btn:
             skill_count = len(extracted_skills)
 
             st.markdown(f"""
-            <div class="metrics-row" style="grid-template-columns: repeat(5, 1fr);">
+            <div class="metrics-row" style="grid-template-columns: repeat(4, 1fr);">
                 <div class="metric-card">
-                    <div class="metric-value" style="color: #c084fc">{match_percentage:.1f}%</div>
-                    <div class="metric-label">Hybrid Score</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-value" style="color: #818cf8">{cosine_score:.1f}%</div>
-                    <div class="metric-label">Semantic (60%)</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-value" style="color: #22d3ee">{keyword_score:.1f}%</div>
-                    <div class="metric-label">Keyword Match (40%)</div>
+                    <div class="metric-value" style="color: #818cf8">{match_percentage:.1f}%</div>
+                    <div class="metric-label">Semantic Score</div>
                 </div>
                 <div class="metric-card">
                     <div class="metric-value" style="color: #f472b6">{entity_count}</div>
@@ -1278,6 +1270,10 @@ if uploaded_file and process_btn:
                 <div class="metric-card">
                     <div class="metric-value" style="color: #34d399">{skill_count}</div>
                     <div class="metric-label">Keterampilan</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" style="color: #fbbf24">{word_count}</div>
+                    <div class="metric-label">Kata (CV)</div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
