@@ -955,15 +955,37 @@ with col1:
             <div class="card-icon card-icon-purple">📝</div>
             <div>
                 <p class="card-title">Kriteria Lowongan</p>
-                <p class="card-subtitle">Deskripsikan skill & pengalaman yang dicari</p>
+                <p class="card-subtitle">Pilih posisi atau tulis deskripsi sendiri</p>
             </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
-    
+
+    # Dictionary posisi pekerjaan beserta deskripsi kriterianya
+    predefined_jobs = {
+        "✏️ Kustom (Tulis Sendiri)": "",
+        "💻 Data Scientist": "Mencari Data Scientist yang menguasai Python, SQL, Machine Learning, Deep Learning, NLP, TensorFlow, PyTorch, Pandas, NumPy, dan analisis data statistik.",
+        "🌐 Frontend Developer": "Mencari Frontend Developer yang ahli menggunakan HTML, CSS, JavaScript, ReactJS, Next.js, TypeScript, Tailwind CSS, dan memahami prinsip UI/UX.",
+        "🔧 Backend Developer": "Mencari Backend Developer yang menguasai Node.js, Python, Golang, PostgreSQL, MySQL, REST API, Docker, dan arsitektur Microservices.",
+        "📱 Mobile Developer": "Mencari Mobile Developer yang berpengalaman dengan Flutter, Dart, React Native, Firebase, REST API, dan pengembangan aplikasi Android maupun iOS.",
+        "🎨 UI/UX Designer": "Mencari desainer yang mahir menggunakan Figma, Adobe XD, membuat wireframe, prototyping interaktif, dan riset pengguna (user research).",
+        "☁️ DevOps Engineer": "Mencari DevOps Engineer yang menguasai Docker, Kubernetes, AWS, GCP, Azure, CI/CD pipeline, Linux, dan otomatisasi infrastruktur.",
+        "🤖 Machine Learning Engineer": "Mencari Machine Learning Engineer yang berpengalaman membangun model ML, menguasai Python, Scikit-learn, TensorFlow, PyTorch, serta deployment model ke produksi.",
+        "🗄️ Database Administrator": "Mencari DBA yang menguasai MySQL, PostgreSQL, MongoDB, Redis, query optimization, database backup, dan manajemen keamanan basis data.",
+    }
+
+    selected_job = st.selectbox(
+        "Pilih Posisi Pekerjaan:",
+        options=list(predefined_jobs.keys()),
+        label_visibility="collapsed"
+    )
+
+    # Auto-fill deskripsi berdasarkan pilihan
+    default_text = predefined_jobs[selected_job] if predefined_jobs[selected_job] else "Tuliskan kriteria keterampilan dan pengalaman yang Anda cari..."
+
     job_desc = st.text_area(
         "Masukkan kriteria yang dicari:",
-        "Mencari programmer yang menguasai Python, Machine Learning, dan React.",
+        value=default_text,
         height=150,
         label_visibility="collapsed"
     )
