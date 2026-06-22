@@ -91,10 +91,12 @@ def run_ner_extraction(raw_text, wikiann_pipe, rekrutmen_pipe):
     intro_text = " ".join(words[:200])
     entities_wiki = wikiann_pipe(intro_text) if intro_text.strip() else []
 
-    # OPTIMASI 2: Rekrutmen (Skill, Jabatan) bisa tersebar di mana saja.
-    # Kita pecah menjadi chunk yang lebih optimal (220 kata) untuk meminimalisir looping.
-    chunk_size = 220
-    chunks = [" ".join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size)]
+    # OPTIMASI 2: Rekrutmen (Skill, Jabatan) diproses maksimal 450 kata pertama saja (sekitar 2 halaman CV).
+    # Sisa kata di halaman-halaman terakhir tidak di-NER untuk menghemat waktu (karena sangat berat di CPU).
+    # Jangan khawatir, sistem Regex (Lexicon) di bawah akan tetap memindai 100% dari teks untuk mencari Skill.
+    ner_words = words[:450]
+    chunk_size = 225
+    chunks = [" ".join(ner_words[i:i + chunk_size]) for i in range(0, len(ner_words), chunk_size)]
     
     entities_rek = []
     for chunk in chunks:
