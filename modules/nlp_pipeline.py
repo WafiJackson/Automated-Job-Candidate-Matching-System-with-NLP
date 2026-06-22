@@ -44,6 +44,10 @@ def process_extracted_entities(ents, label_filter, is_wiki=False):
         'hard', 'soft', 'skills', 'skill', 'software', 'berbasis web', 'web development',
         'development', 'pemrogram', 'pemrogrammer', 'nat', 'ent', 'dar', 'jal', 'ac', 'id',
         'informasi', 'internal', 'informasi internal', 'database', 'studio', 'studio code',
+        'merancang', 'solusi', 'interpretasi', 'bisnis', 'keputusan', 'melalui', 'dasar',
+        'strategi', 'pemasaran', 'sampai', 'sekarang', 'cohort', 'mengim', 'ro', 'pt', 'hp',
+        'abc', 'def', 'ple', 'data', 'sci', 'mengembangkan', 'membantu', 'mengambil', 'menyusun',
+        'meningkatkan', 'berkolaborasi', 'melakukan', 'mengidentifikasi', 'harga', 'hingga',
         # English Stopwords & Noise
         'and', 'the', 'with', 'for', 'you', 'are', 'is', 'from', 'have', 'has', 'was', 'this', 
         'that', 'which', 'using', 'new', 'team', 'work', 'experience', 'years', 'master', 
@@ -210,15 +214,15 @@ def extract_contact_info(raw_text: str) -> dict:
 
 def calculate_similarity(extracted_jobs, extracted_skills, job_desc, raw_text, embedder):
     """
-    Menghitung skor kecocokan antara CV dan deskripsi pekerjaan menggunakan Semantic Match (Cosine Similarity).
+    Menghitung skor kecocokan antara CV dan deskripsi pekerjaan menggunakan murni Semantic Match (Cosine Similarity).
+    Untuk menghindari hasil buruk dari NER, kita langsung membandingkan teks asli CV dengan kriteria lowongan.
     """
     # --- Semantic Match (Cosine Similarity) ---
-    cv_structured_text = f"Jabatan: {', '.join(extracted_jobs)}. Keterampilan: {', '.join(extracted_skills)}"
-    if not extracted_jobs and not extracted_skills:
-        cv_structured_text = raw_text.strip()[:500]
+    # Batasi raw_text maksimal 1000 karakter agar representasi embedding tetap fokus
+    cv_text_focus = raw_text.strip()[:1000]
 
     job_embedding = embedder.encode(job_desc, convert_to_tensor=True)
-    cv_embedding = embedder.encode(cv_structured_text, convert_to_tensor=True)
+    cv_embedding = embedder.encode(cv_text_focus, convert_to_tensor=True)
     cosine_score = util.cos_sim(cv_embedding, job_embedding)[0][0].item() * 100
 
     # Kembalikan cosine_score sebagai skor utama
