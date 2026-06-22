@@ -147,17 +147,53 @@ def run_ner_extraction(raw_text, wikiann_pipe, rekrutmen_pipe):
     entities = entities_wiki + entities_rek
     return names, institutions, locations, extracted_skills, extracted_jobs, entities
 
+def extract_contact_info(raw_text: str) -> dict:
+    """
+    Mengekstrak informasi kontak (email dan nomor telepon) dari teks CV menggunakan Regex.
+    
+    Returns:
+        dict: {'email': str|None, 'phone': str|None}
+    """
+    # Pola email umum
+    email_pattern = r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}'
+    email_match = re.search(email_pattern, raw_text)
+    email = email_match.group(0) if email_match else None
+
+    # Pola nomor telepon Indonesia (+62 atau 08xx) dengan berbagai format pemisah
+    phone_pattern = r'(?:\+62|\(\+62\)|0)[\s.\-]?(?:8[0-9]{2}|21|22|31|274|361)[\s.\-]?[0-9]{3,4}[\s.\-]?[0-9]{3,5}'
+    phone_match = re.search(phone_pattern, raw_text)
+    phone = phone_match.group(0).strip() if phone_match else None
+
+    return {'email': email, 'phone': phone}
+
 def calculate_similarity(extracted_jobs, extracted_skills, job_desc, raw_text, embedder):
-    """Menghitung skor kecocokan antara CV dan deskripsi pekerjaan."""
-    job_embedding = embedder.encode(job_desc, convert_to_tensor=True)
+    """
+    Menghitung skor kecocokan antara CV dan deskripsi pekerjaan menggunakan Hybrid Scoring.
     
+    Skor Akhir = (60% x Cosine Similarity) + (40% x Keyword Match)
+    - Cosine Similarity: Mengukur kedekatan semantik secara keseluruhan.
+    - Keyword Match: Mengukur berapa persen kata kunci dari job desc yang benar-benar ada di CV.
+    """
+    # --- Komponen 1: Cosine Similarity (60%) ---
     cv_structured_text = f"Jabatan: {', '.join(extracted_jobs)}. Keterampilan: {', '.join(extracted_skills)}"
-    
     if not extracted_jobs and not extracted_skills:
         cv_structured_text = raw_text.strip()[:500]
-        
+
+    job_embedding = embedder.encode(job_desc, convert_to_tensor=True)
     cv_embedding = embedder.encode(cv_structured_text, convert_to_tensor=True)
-    cosine_scores = util.cos_sim(cv_embedding, job_embedding)
-    match_percentage = cosine_scores[0][0].item() * 100
-    
-    return match_percentage
+    cosine_score = util.cos_sim(cv_embedding, job_embedding)[0][0].item() * 100
+
+    # --- Komponen 2: Keyword Match / Jaccard (40%) ---
+    # Ekstrak kata bermakna dari job description (filter stopwords singkat)
+    job_words = set(re.findall(r'\b[a-zA-Z0-9+#]{2,}\b', job_desc.lower()))
+    cv_words = set(re.findall(r'\b[a-zA-Z0-9+#]{2,}\b', ' '.join(extracted_skills + extracted_jobs).lower()))
+
+    if job_words:
+        keyword_score = (len(job_words & cv_words) / len(job_words)) * 100
+    else:
+        keyword_score = 0.0
+
+    # --- Skor Akhir Hybrid ---
+    hybrid_score = (0.6 * cosine_score) + (0.4 * keyword_score)
+
+    return round(hybrid_score, 2), round(cosine_score, 2), round(keyword_score, 2)

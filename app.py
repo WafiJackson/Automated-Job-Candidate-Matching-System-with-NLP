@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import base64
 from streamlit_lottie import st_lottie
-from modules.nlp_pipeline import load_ai_models, run_ner_extraction, calculate_similarity
+from modules.nlp_pipeline import load_ai_models, run_ner_extraction, calculate_similarity, extract_contact_info
 from modules.ocr_engine import extract_text_from_image
 from modules.pdf_handler import process_pdf
 
@@ -1095,7 +1095,8 @@ if uploaded_file and process_btn:
         if not raw_text.strip():
             st.error("⚠️ Teks dokumen kosong atau tidak terbaca. Silakan unggah dokumen yang lebih jelas.")
         else:
-            match_percentage = calculate_similarity(extracted_jobs, extracted_skills, job_desc, raw_text, embedder)
+            match_percentage, cosine_score, keyword_score = calculate_similarity(extracted_jobs, extracted_skills, job_desc, raw_text, embedder)
+            contact_info = extract_contact_info(raw_text)
             # Final pipeline - all done
             st.markdown("""
             <div class="pipeline-container">
@@ -1169,7 +1170,7 @@ if uploaded_file and process_btn:
                             </svg>
                             <div class="gauge-inner">
                                 <div class="gauge-value">{match_percentage:.1f}%</div>
-                                <div class="gauge-label">Similarity Score</div>
+                                <div class="gauge-label">Hybrid Score</div>
                             </div>
                         </div>
                         <div class="gauge-status {status_class}">{status_text}</div>
@@ -1178,10 +1179,12 @@ if uploaded_file and process_btn:
                 """, unsafe_allow_html=True)
 
             with res_col2:
-                # Biographical Card (WikiANN)
+                # Biographical Card (WikiANN + Regex)
                 candidate_name = ", ".join(names) if names else "Tidak Terdeteksi"
                 candidate_inst = ", ".join(institutions) if institutions else "Tidak Terdeteksi"
                 candidate_loc = ", ".join(locations) if locations else "Tidak Terdeteksi"
+                candidate_email = contact_info.get('email') or "Tidak Terdeteksi"
+                candidate_phone = contact_info.get('phone') or "Tidak Terdeteksi"
                 
                 st.markdown(f"""
                 <div class="glass-card" style="animation-delay: 0.15s">
@@ -1189,13 +1192,15 @@ if uploaded_file and process_btn:
                         <div class="card-icon card-icon-blue">👤</div>
                         <div>
                             <p class="card-title">Profil Pelamar</p>
-                            <p class="card-subtitle">Entitas profil diekstrak oleh WikiANN Model</p>
+                            <p class="card-subtitle">Entitas profil diekstrak oleh WikiANN Model + Regex</p>
                         </div>
                     </div>
-                    <div style="font-size: 0.9rem; line-height: 1.8; color: var(--text-primary);">
+                    <div style="font-size: 0.9rem; line-height: 1.9; color: var(--text-primary);">
                         <strong>👤 Nama:</strong> {candidate_name}<br>
                         <strong>🏢 Universitas/Institusi:</strong> {candidate_inst}<br>
-                        <strong>📍 Lokasi:</strong> {candidate_loc}
+                        <strong>📍 Lokasi:</strong> {candidate_loc}<br>
+                        <strong>📧 Email:</strong> {candidate_email}<br>
+                        <strong>📞 Telepon:</strong> {candidate_phone}
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -1247,16 +1252,24 @@ if uploaded_file and process_btn:
                 </div>
                 """, unsafe_allow_html=True)
 
-            # Metrics row
+            # Metrics row — Score breakdown + stats
             word_count = len(raw_text.split())
             entity_count = len(entities)
             skill_count = len(extracted_skills)
 
             st.markdown(f"""
-            <div class="metrics-row">
+            <div class="metrics-row" style="grid-template-columns: repeat(5, 1fr);">
                 <div class="metric-card">
-                    <div class="metric-value" style="color: #c084fc">{word_count}</div>
-                    <div class="metric-label">Kata Terdeteksi (OCR)</div>
+                    <div class="metric-value" style="color: #c084fc">{match_percentage:.1f}%</div>
+                    <div class="metric-label">Hybrid Score</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" style="color: #818cf8">{cosine_score:.1f}%</div>
+                    <div class="metric-label">Semantic (60%)</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" style="color: #22d3ee">{keyword_score:.1f}%</div>
+                    <div class="metric-label">Keyword Match (40%)</div>
                 </div>
                 <div class="metric-card">
                     <div class="metric-value" style="color: #f472b6">{entity_count}</div>
